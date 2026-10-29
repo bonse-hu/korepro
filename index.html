@@ -36,7 +36,6 @@
       max-width: 360px;
       box-sizing: border-box;
     }
-    /* モード切り替えボタン */
     .mode-selector {
       display: flex;
       justify-content: center;
@@ -89,6 +88,10 @@
     .btn:active {
       transform: scale(0.98);
     }
+    .btn-answer {
+      background-color: #ffa502;
+      color: white;
+    }
     .btn-audio {
       background-color: #70a1ff;
       color: white;
@@ -126,7 +129,7 @@
 <body>
 
 <div class="card">
-  <!-- モード切り替えタブ -->
+  <!-- モード切り替え -->
   <div class="mode-selector">
     <button class="mode-btn active" id="mode1Btn">モード①<br>(日本語 ➔ 韓国語)</button>
     <button class="mode-btn" id="mode2Btn">モード②<br>(韓国語 ➔ 日本語)</button>
@@ -135,6 +138,7 @@
   <div class="korean-word" id="wordDisplay">---</div>
   <div class="japanese-meaning" id="meaningDisplay">---</div>
 
+  <button class="btn btn-answer" id="answerBtn">💡 答えを見る</button>
   <button class="btn btn-audio" id="audioBtn">🔊 お手本を聞く</button>
   <button class="btn btn-mic" id="micBtn">🎤 発音する</button>
   <button class="btn btn-next" id="nextBtn">次へ ➔</button>
@@ -156,13 +160,14 @@ const words = [
 ];
 
 let currentIndex = 0;
-let currentMode = 1; // 1: 日本語表示 ➔ 発音 ➔ 韓国語開示 / 2: 韓国語表示 ➔ 発音 ➔ 日本語開示
+let currentMode = 1; // 1: 日本語表示 ➔ 韓国語隠し / 2: 韓国語表示 ➔ 日本語隠し
 let recognition = null;
 
 const wordDisplay = document.getElementById('wordDisplay');
 const meaningDisplay = document.getElementById('meaningDisplay');
 const mode1Btn = document.getElementById('mode1Btn');
 const mode2Btn = document.getElementById('mode2Btn');
+const answerBtn = document.getElementById('answerBtn');
 const audioBtn = document.getElementById('audioBtn');
 const micBtn = document.getElementById('micBtn');
 const nextBtn = document.getElementById('nextBtn');
@@ -181,7 +186,7 @@ function playKoreanAudio(text) {
   }
 }
 
-// 2. 音声認識の初期化
+// 2. 音声認識機能
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
@@ -199,7 +204,7 @@ if (!SpeechRecognition) {
   };
 
   recognition.onresult = (event) => {
-    const recognizedText = event.results[0][0].transcript.trim();
+    const recognizedText = event.results.transcript.trim();
     judgePronunciation(recognizedText);
   };
 
@@ -213,29 +218,27 @@ if (!SpeechRecognition) {
   };
 }
 
-// モードごとの画面表示更新
+// 単語表示の更新
 function showWord(index) {
   const word = words[index];
 
   if (currentMode === 1) {
-    // モード①: 日本語のみ表示（韓国語は伏字）
     wordDisplay.textContent = "❓❓❓";
     meaningDisplay.textContent = word.jp;
   } else {
-    // モード②: 韓国語のみ表示（日本語は伏字）
     wordDisplay.textContent = word.kr;
     meaningDisplay.textContent = "❓❓❓";
   }
   statusDisplay.innerHTML = "「発音する」を押して話してください";
 }
 
-// 判定処理 ＆ 隠されていたテキストの表示
+// 発音判定処理
 function judgePronunciation(userInput) {
   const currentWord = words[currentIndex];
   const targetWord = currentWord.kr.replace(/\s+/g, '');
   const cleanInput = userInput.replace(/\s+/g, '');
 
-  // 判定後は両方のテキストを表示
+  // 判定時は隠されていた部分を表示
   wordDisplay.textContent = currentWord.kr;
   meaningDisplay.textContent = currentWord.jp;
 
@@ -246,7 +249,20 @@ function judgePronunciation(userInput) {
   }
 }
 
-// モード切り替えイベント
+// ボタンイベント設定
+
+// 💡 答えを見るボタンの処理
+answerBtn.addEventListener('click', () => {
+  const currentWord = words[currentIndex];
+  if (currentMode === 1) {
+    // モード①: 隠れている韓国語を表示
+    wordDisplay.textContent = currentWord.kr;
+  } else {
+    // モード②: 隠れている日本語を表示
+    meaningDisplay.textContent = currentWord.jp;
+  }
+});
+
 mode1Btn.addEventListener('click', () => {
   if (currentMode !== 1) {
     currentMode = 1;
@@ -259,13 +275,12 @@ mode1Btn.addEventListener('click', () => {
 mode2Btn.addEventListener('click', () => {
   if (currentMode !== 2) {
     currentMode = 2;
-    mode2Btn.classList.add('active');
+    mode1Btn.classList.add('active');
     mode1Btn.classList.remove('active');
     showWord(currentIndex);
   }
 });
 
-// イベント設定
 audioBtn.addEventListener('click', () => {
   playKoreanAudio(words[currentIndex].kr);
 });
@@ -286,7 +301,7 @@ nextBtn.addEventListener('click', () => {
   showWord(currentIndex);
 });
 
-// 初期表示
+// 初期描画
 showWord(currentIndex);
 
 // Service Worker 登録
