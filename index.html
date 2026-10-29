@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>韓国語発音チェック</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 500px;
+            margin: 40px auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 1.5rem;
+            color: #4A90E2;
+            margin-bottom: 20px;
+        }
+        .word-card {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #2c3e50;
+        }
+        .meaning {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        button {
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        .result {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        .correct { color: #27ae60; }
+        .incorrect { color: #e74c3c; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>韓国語発音チェック</h1>
+        
+        <div id="word-card" class="word-card">--</div>
+        <div id="meaning" class="meaning">ボタンを押してスタート</div>
+
+        <button id="next-btn">次の単語を見る</button>
+        <button id="mic-btn">発音する（マイク）</button>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        // サンプルの単語リスト（韓国語と日本語の意味）
+        const words = [
+            { ko: "안녕하세요", ja: "こんにちは" },
+            { ko: "감사합니다", ja: "ありがとうございます" },
+            { ko: "물", ja: "水" },
+            { ko: "사과", ja: "りんご" },
+            { ko: "고양이", ja: "猫" },
+            { ko: "강아지", ja: "犬" },
+            { ko: "사랑해요", ja: "愛しています" },
+            { ko: "친구", ja: "友達" }
+        ];
+
+        let currentWord = null;
+
+        const wordCard = document.getElementById('word-card');
+        const meaningCard = document.getElementById('meaning');
+        const nextBtn = document.getElementById('next-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const resultDiv = document.getElementById('result');
+
+        // ランダムな単語を表示する関数
+        function showRandomWord() {
+            const randomIndex = Math.floor(Math.random() * words.length);
+            currentWord = words[randomIndex];
+            wordCard.textContent = currentWord.ko;
+            meaningCard.textContent = `意味: ${currentWord.ja}`;
+            resultDiv.textContent = '';
+        }
+
+        nextBtn.addEventListener('click', showRandomWord);
+
+        // 音声認識（発音チェック）の処理
+        micBtn.addEventListener('click', () => {
+            if (!currentWord) {
+                alert('まずは「次の単語を見る」を押してください。');
+                return;
+            }
+
+            // ブラウザの音声認識APIのサポート確認
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert('お使いのブラウザは音声認識に対応していません。Google ChromeやSafariをご利用ください。');
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'ko-KR'; // 韓国語に設定
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            resultDiv.textContent = '聞いています...発音してください🗣️';
+            resultDiv.className = 'result';
+
+            recognition.start();
+
+            recognition.onresult = (event) => {
+                const spokenText = event.results[0][0].transcript.trim();
+                // 句読点などを簡易的に削除して比較
+                const cleanTarget = currentWord.ko.replace(/[.,?!]/g, '');
+                const cleanSpoken = spokenText.replace(/[.,?!]/g, '');
+
+                if (cleanSpoken === cleanTarget) {
+                    resultDiv.innerHTML = `正解！🎉 (認識された言葉: ${spokenText})`;
+                    resultDiv.className = 'result correct';
+                } else {
+                    resultDiv.innerHTML = `おしい！<br>認識結果: "${spokenText}" (正解: ${currentWord.ko})`;
+                    resultDiv.className = 'result incorrect';
+                }
+            };
+
+            recognition.onerror = (event) => {
+                resultDiv.textContent = `エラーが発生しました: ${event.error}`;
+                resultDiv.className = 'result incorrect';
+            };
+        });
+
+        // 初期表示時に1つランダム表示
+        showRandomWord();
+    </script>
+
+    <!-- Service Workerの登録 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(() => console.log('Service Worker 登録成功'));
+        }
+    </script>
+</body>
+</html>
