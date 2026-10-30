@@ -205,14 +205,105 @@
 <script>
 // 単語データ
 const words = [
-  { kr: "안녕하세요", jp: "こんにちは" },
+  { kr: "가게", jp: "店" },
+  { kr: "가격", jp: "価格" },
+  { kr: "가구", jp: "家具" },
+  { kr: "가깝다", jp: "近い" },
+  { kr: "가끔", jp: "時々" },
+  { kr: "가다", jp: "行く" },
+  { kr: "가르치다", jp: "教える" },
+  { kr: "가방", jp: "鞄" },
+  { kr: "가볍다", jp: "軽い" },
+  { kr: "가수", jp: "歌手" },
+  { kr: "가슴", jp: "胸" },
+  { kr: "가요", jp: "歌謡" },
+  { kr: "가운데", jp: "間、中間" },
+  { kr: "가위", jp: "はさみ" },
+  { kr: "가을", jp: "秋" },
+  { kr: "가장", jp: "最も、一番" },
+  { kr: "가져가다", jp: "持って行く" },
+  { kr: "가져오다", jp: "持って来る" },
+  { kr: "가족", jp: "家族" },
+  { kr: "가지", jp: "種類" },
+  { kr: "가지다", jp: "持つ" },
+  { kr: "각", jp: "各、おのおの" },
+  { kr: "간", jp: "間" },
+  { kr: "간단하다", jp: "簡単だ" },
+  { kr: "간단히", jp: "簡単に" },
+  { kr: "간식", jp: "間食、おやつ" },
+  { kr: "간장", jp: "醤油" },
+  { kr: "간호사", jp: "看護士" },
+  { kr: "갈비", jp: "カルビ" },
+  { kr: "갈비탕", jp: "カルビタン" },
+  { kr: "갈색", jp: "褐色、茶色" },
+  { kr: "갈아타다", jp: "乗り換える" },
+  { kr: "감", jp: "柿" },
+  { kr: "감기", jp: "風邪" },
+  { kr: "감기약", jp: "風邪薬" },
+  { kr: "감다", jp: "（目を）閉じる" },
+  { kr: "감동", jp: "感動" },
+  { kr: "감동하다", jp: "感動する" },
+  { kr: "감사", jp: "感謝" },
+  { kr: "감사드립니다", jp: "ありがとうございます" },
+  { kr: "감사하다", jp: "感謝する" },
   { kr: "감사합니다", jp: "ありがとうございます" },
-  { kr: "맛있어요", jp: "美味しいです" },
-  { kr: "고마워요", jp: "ありがとう" },
-  { kr: "네", jp: "はい" },
-  { kr: "아니요", jp: "いいえ" },
-  { kr: "사랑해요", jp: "愛しています" },
-  { kr: "죄송합니다", jp: "すみません" }
+  { kr: "감자", jp: "じゃがいも" },
+  { kr: "감자탕", jp: "カムジャタン" },
+  { kr: "갑자기", jp: "急に" },
+  { kr: "값", jp: "値段、価値" },
+  { kr: "강", jp: "川" },
+  { kr: "강아지", jp: "子犬" },
+  { kr: "강좌", jp: "講座" },
+  { kr: "갖다", jp: "持つ" },
+  { kr: "같다", jp: "同じだ" },
+  { kr: "같이", jp: "一緒に" },
+  { kr: "개", jp: "～個、犬" },
+  { kr: "개나리", jp: "レンギョウ" },
+  { kr: "개인", jp: "個人" },
+  { kr: "거기", jp: "そこ" },
+  { kr: "거리", jp: "通り、街" },
+  { kr: "거실", jp: "居室、居間" },
+  { kr: "거울", jp: "鏡" },
+  { kr: "거의", jp: "ほとんど" },
+  { kr: "거짓말", jp: "嘘" },
+  { kr: "걱정", jp: "心配" },
+  { kr: "걱정하다", jp: "心配する" },
+  { kr: "건강", jp: "健康" },
+  { kr: "건강하다", jp: "健康だ" },
+  { kr: "건너가다", jp: "渡って行く、渡る、横切る" },
+  { kr: "건너다", jp: "渡る" },
+  { kr: "건너편", jp: "向こう側、向かい" },
+  { kr: "건물", jp: "建物" },
+  { kr: "건배", jp: "乾杯" },
+  { kr: "걷다", jp: "歩く" },
+  { kr: "걸다", jp: "かける" },
+  { kr: "걸리다", jp: "かかる" },
+  { kr: "걸어가다", jp: "歩いて行く" },
+  { kr: "걸어오다", jp: "歩いて来る" },
+  { kr: "검은색", jp: "黒、黒色" },
+  { kr: "것", jp: "もの、こと" },
+  { kr: "게임", jp: "ゲーム、遊び" },
+  { kr: "겨울", jp: "冬" },
+  { kr: "겨울방학", jp: "冬休み" },
+  { kr: "결과", jp: "結果" },
+  { kr: "결정", jp: "決定" },
+  { kr: "결정하다", jp: "決定する" },
+  { kr: "결혼", jp: "結婚" },
+  { kr: "결혼식", jp: "結婚式" },
+  { kr: "결혼하다", jp: "結婚する" },
+  { kr: "경기", jp: "競技、試合" },
+  { kr: "경기장", jp: "競技場" },
+  { kr: "경복궁", jp: "景福宮" },
+  { kr: "경주", jp: "慶州" },
+  { kr: "경찰", jp: "警察" },
+  { kr: "경찰관", jp: "警察官" },
+  { kr: "경찰서", jp: "警察署" },
+  { kr: "경치", jp: "景色、風景" },
+  { kr: "경험", jp: "経験" },
+  { kr: "계단", jp: "階段" },
+  { kr: "계란", jp: "鶏卵、たまご" },
+  { kr: "계산하다", jp: "計算する" },
+  { kr: "계속", jp: "続けて" }
 ];
 
 let currentIndex = 0;
@@ -356,7 +447,7 @@ function selectNextIndex() {
   return randomChoice.idx;
 }
 
-// 「答えを見る」処理（答えを表示し判定ボタンに切り替え）
+// 「答えを見る」処理
 answerBtn.addEventListener('click', () => {
   const currentWord = words[currentIndex];
   wordDisplay.textContent = currentWord.kr;
@@ -364,10 +455,10 @@ answerBtn.addEventListener('click', () => {
 
   answerBtn.style.display = 'none';
   selfAssessGroup.style.display = 'flex';
-  statusDisplay.innerHTML = "覚えていましたか？ボタンを押して記録してください";
+  statusDisplay.innerHTML = "覚えていましたか？ボタンを押して選択してください";
 });
 
-// 自己判定処理（覚えていた / 覚えていなかった）
+// 自己判定処理（覚えていた / 覚えていなかった）➔ 成績記録後にすぐ次の出題へ
 function recordSelfAssessment(isCorrect) {
   const currentWord = words[currentIndex];
 
@@ -378,16 +469,13 @@ function recordSelfAssessment(isCorrect) {
 
   if (isCorrect) {
     wordStats[currentWord.kr].corrects += 1;
-    statusDisplay.innerHTML = `<span class="result-correct">⭕ 覚えていた！（正解に記録）</span>`;
-  } else {
-    statusDisplay.innerHTML = `<span class="result-wrong">❌ 覚えていなかった...（不正解に記録）</span>`;
   }
 
   saveStats(wordStats);
-  updateWordStatsDisplay(currentWord.kr);
 
-  // 判定完了後は重複カウント防止のためボタンを隠す
-  selfAssessGroup.style.display = 'none';
+  // 即座に次の単語へ移動
+  currentIndex = selectNextIndex();
+  showWord(currentIndex);
 }
 
 // 音声判定処理
