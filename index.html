@@ -115,7 +115,6 @@
     .btn:active {
       transform: scale(0.98);
     }
-    /* 横並びボタン用のグループ */
     .btn-group {
       display: flex;
       gap: 10px;
@@ -187,14 +186,15 @@
   <div class="japanese-meaning" id="meaningDisplay">---</div>
   <div class="word-stats" id="statsDisplayDetail">📊 成績: 未挑戦</div>
 
-  <button class="btn btn-answer" id="answerBtn">💡 答えを見る</button>
-  <button class="btn btn-audio" id="audioBtn">🔊 お手本を聞く</button>
-  <button class="btn btn-mic" id="micBtn">🎤 発音して判定</button>
-    <!-- 手動判定ボタン（声が出せない場所用） -->
+  <!-- 手動判定ボタン（声が出せない場所用） -->
   <div class="btn-group">
     <button class="btn btn-know" id="knowBtn">⭕ 分かった</button>
     <button class="btn btn-dontknow" id="dontKnowBtn">❌ 分からない</button>
   </div>
+
+  <button class="btn btn-answer" id="answerBtn">💡 答えを見る</button>
+  <button class="btn btn-audio" id="audioBtn">🔊 お手本を聞く</button>
+  <button class="btn btn-mic" id="micBtn">🎤 発音して判定</button>
   <button class="btn btn-next" id="nextBtn">次へ ➔</button>
 
   <div class="status" id="statusDisplay">ボタンを押すか、「発音」して挑戦してください</div>
@@ -407,12 +407,19 @@ function showWord(index) {
   statusDisplay.innerHTML = "ボタンを押すか、「発音」して挑戦してください";
 }
 
-// 次の単語選択（苦手集中対応）
+// 次の単語インデックスをランダム選出（同じ単語の連続を防止）
 function selectNextIndex() {
+  // 通常モード（ランダム出題）
   if (!isWeakOnly) {
-    return (currentIndex + 1) % words.length;
+    if (words.length <= 1) return 0;
+    let nextIdx;
+    do {
+      nextIdx = Math.floor(Math.random() * words.length);
+    } while (nextIdx === currentIndex);
+    return nextIdx;
   }
 
+  // 苦手集中モード（正解率80%未満または未挑戦）
   const weakIndices = words.map((w, idx) => {
     const stat = wordStats[w.kr] || { attempts: 0, corrects: 0 };
     const rate = stat.attempts > 0 ? (stat.corrects / stat.attempts) * 100 : 0;
@@ -421,7 +428,12 @@ function selectNextIndex() {
 
   if (weakIndices.length === 0) {
     statusDisplay.innerHTML = "🎉 すべての苦手単語を克服しました！";
-    return (currentIndex + 1) % words.length;
+    if (words.length <= 1) return 0;
+    let nextIdx;
+    do {
+      nextIdx = Math.floor(Math.random() * words.length);
+    } while (nextIdx === currentIndex);
+    return nextIdx;
   }
 
   const candidates = weakIndices.filter(item => item.idx !== currentIndex);
@@ -434,11 +446,9 @@ function selectNextIndex() {
 function recordSelfAssessment(isCorrect) {
   const currentWord = words[currentIndex];
 
-  // 隠れている文字を開示
   wordDisplay.textContent = currentWord.kr;
   meaningDisplay.textContent = currentWord.jp;
 
-  // カウント更新
   if (!wordStats[currentWord.kr]) {
     wordStats[currentWord.kr] = { attempts: 0, corrects: 0 };
   }
@@ -542,7 +552,8 @@ nextBtn.addEventListener('click', () => {
   showWord(currentIndex);
 });
 
-// 初期描画
+// 初期描画（最初もランダムに選択）
+currentIndex = Math.floor(Math.random() * words.length);
 showWord(currentIndex);
 
 // Service Worker 登録
