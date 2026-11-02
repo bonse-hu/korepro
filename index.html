@@ -124,34 +124,13 @@
       margin: 0;
       flex: 1;
     }
-    .btn-remember {
-      background-color: #2ed573;
-      color: white;
-    }
-    .btn-forgot {
-      background-color: #ff4757;
-      color: white;
-    }
-    .btn-answer {
-      background-color: #ffa502;
-      color: white;
-    }
-    .btn-audio {
-      background-color: #70a1ff;
-      color: white;
-    }
-    .btn-mic {
-      background-color: #5352ed;
-      color: white;
-    }
-    .btn-next {
-      background-color: #2f3542;
-      color: white;
-    }
-    .btn-listen {
-      background-color: #8e44ad;
-      color: white;
-    }
+    .btn-remember { background-color: #2ed573; color: white; }
+    .btn-forgot   { background-color: #ff4757; color: white; }
+    .btn-answer   { background-color: #ffa502; color: white; }
+    .btn-audio    { background-color: #70a1ff; color: white; }
+    .btn-mic      { background-color: #5352ed; color: white; }
+    .btn-next     { background-color: #2f3542; color: white; }
+    .btn-listen   { background-color: #8e44ad; color: white; }
     .btn:disabled {
       background-color: #ccc;
       cursor: not-allowed;
@@ -172,7 +151,25 @@
       font-weight: bold;
       font-size: 19px;
     }
-    /* 聞き流しモード用の全画面オーバーレイ（何も表示しない黒画面） */
+    /* 覚えた単語の情報表示（通常画面） */
+    .mastered-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #555;
+      margin: 4px 0 8px;
+    }
+    .mastered-reset-btn {
+      font-size: 12px;
+      padding: 4px 10px;
+      border: 1px solid #aaa;
+      background: white;
+      color: #555;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    /* 聞き流しモード用の全画面オーバーレイ */
     .listen-overlay {
       display: none;
       position: fixed;
@@ -182,7 +179,45 @@
       height: 100vh;
       background-color: #000;
       z-index: 9999;
-      cursor: pointer;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 20px 20px 50px;
+      box-sizing: border-box;
+    }
+    .listen-info {
+      color: #555;
+      font-size: 13px;
+      margin-bottom: 15px;
+    }
+    .listen-toast {
+      position: absolute;
+      top: 40%;
+      left: 0;
+      width: 100%;
+      color: #ddd;
+      font-size: 18px;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .listen-toast.show {
+      opacity: 1;
+    }
+    .listen-controls {
+      width: 100%;
+      max-width: 360px;
+    }
+    .btn-mastered {
+      background-color: #1e5631;
+      color: #e0e0e0;
+      padding: 22px;
+      font-size: 18px;
+    }
+    .btn-stop {
+      background-color: #333;
+      color: #bbb;
     }
   </style>
 </head>
@@ -216,13 +251,26 @@
   <button class="btn btn-next" id="nextBtn">次へ ➔</button>
 
   <!-- 聞き流しモード開始ボタン -->
-  <button class="btn btn-listen" id="listenBtn">🎧 聞き流しモード（画面タップで停止）</button>
+  <button class="btn btn-listen" id="listenBtn">🎧 聞き流しモード</button>
+
+  <!-- 覚えた単語の数とリセット -->
+  <div class="mastered-info">
+    <span id="masteredCountDisplay">✅ 覚えた単語: 0語</span>
+    <button class="mastered-reset-btn" id="masteredResetBtn">リセット</button>
+  </div>
 
   <div class="status" id="statusDisplay">「答えを見る」か「発音して判定」を押してください</div>
 </div>
 
-<!-- 聞き流しモード中の黒画面（タップで停止） -->
-<div class="listen-overlay" id="listenOverlay"></div>
+<!-- 聞き流しモード中の黒画面 -->
+<div class="listen-overlay" id="listenOverlay">
+  <div class="listen-toast" id="listenToast"></div>
+  <div class="listen-info" id="listenInfo"></div>
+  <div class="listen-controls">
+    <button class="btn btn-mastered" id="masteredBtn">✅ 覚えた（次回から出さない）</button>
+    <button class="btn btn-stop" id="stopListenBtn">⏹ 停止</button>
+  </div>
+</div>
 
 <script>
 // 単語データ
@@ -337,24 +385,35 @@ let recognition = null;
 // 聞き流しモード用の状態
 let isListening = false;
 let listenTimer = null;
+let loopId = 0;              // 読み上げの世代管理（スキップ時に古いコールバックを無効化）
 let currentUtterance = null; // GC対策で参照を保持
 let wakeLock = null;
+let toastTimer = null;
 
 // 聞き流しモードの間隔設定（ミリ秒）
 const PAUSE_AFTER_KOREAN = 1500;   // 韓国語のあと日本語までの間
 const PAUSE_AFTER_JAPANESE = 2000; // 日本語のあと次の単語までの間
 
-// 成績データの読み込み・保存 (localStorage)
+// ===== 保存データ (localStorage) =====
 function loadStats() {
   const saved = localStorage.getItem('korean_word_stats');
   return saved ? JSON.parse(saved) : {};
 }
-
 function saveStats(stats) {
   localStorage.setItem('korean_word_stats', JSON.stringify(stats));
 }
 
+// 覚えた単語（聞き流しモードで出題しない単語）
+function loadMastered() {
+  const saved = localStorage.getItem('korean_mastered_words');
+  return new Set(saved ? JSON.parse(saved) : []);
+}
+function saveMastered() {
+  localStorage.setItem('korean_mastered_words', JSON.stringify([...masteredSet]));
+}
+
 let wordStats = loadStats();
+let masteredSet = loadMastered();
 
 const wordDisplay = document.getElementById('wordDisplay');
 const meaningDisplay = document.getElementById('meaningDisplay');
@@ -371,9 +430,23 @@ const micBtn = document.getElementById('micBtn');
 const nextBtn = document.getElementById('nextBtn');
 const listenBtn = document.getElementById('listenBtn');
 const listenOverlay = document.getElementById('listenOverlay');
+const listenInfo = document.getElementById('listenInfo');
+const listenToast = document.getElementById('listenToast');
+const masteredBtn = document.getElementById('masteredBtn');
+const stopListenBtn = document.getElementById('stopListenBtn');
+const masteredCountDisplay = document.getElementById('masteredCountDisplay');
+const masteredResetBtn = document.getElementById('masteredResetBtn');
 const statusDisplay = document.getElementById('statusDisplay');
 
-// 指定言語に合う音声を探す（見つからなければnull）
+// 覚えた単語数の表示更新
+function updateMasteredDisplay() {
+  // 単語リストに存在しないものは数えない
+  const count = words.filter(w => masteredSet.has(w.kr)).length;
+  masteredCountDisplay.textContent = `✅ 覚えた単語: ${count}語 / ${words.length}語`;
+  listenInfo.textContent = `残り ${words.length - count}語`;
+}
+
+// ===== 音声 =====
 function findVoice(lang) {
   if (!('speechSynthesis' in window)) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -383,13 +456,11 @@ function findVoice(lang) {
          null;
 }
 
-// 音声の一覧は非同期で読み込まれることがあるため事前に取得
 if ('speechSynthesis' in window) {
   window.speechSynthesis.getVoices();
   window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 }
 
-// 音声再生機能
 function playKoreanAudio(text) {
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
@@ -404,7 +475,6 @@ function playKoreanAudio(text) {
   }
 }
 
-// 読み上げ終了時にコールバックを呼ぶ汎用関数
 function speakWithCallback(text, lang, rate, onEnd) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
@@ -426,25 +496,97 @@ function speakWithCallback(text, lang, rate, onEnd) {
 }
 
 // ===== 聞き流しモード =====
+
+// 聞き流し用の出題選択（覚えた単語を除外）
+function selectListenIndex() {
+  let pool = words
+    .map((w, idx) => ({ w, idx }))
+    .filter(item => !masteredSet.has(item.w.kr));
+
+  // 苦手集中モードONなら、苦手単語に絞る（該当なしなら絞らない）
+  if (isWeakOnly) {
+    const weakPool = pool.filter(item => {
+      const stat = wordStats[item.w.kr] || { attempts: 0, corrects: 0 };
+      if (stat.attempts === 0) return true;
+      return (stat.corrects / stat.attempts) * 100 < 80;
+    });
+    if (weakPool.length > 0) pool = weakPool;
+  }
+
+  // 直前と同じ単語を避ける（候補が1つしかない場合は除く）
+  const candidates = pool.filter(item => item.idx !== currentIndex);
+  const target = candidates.length > 0 ? candidates : pool;
+  return target[Math.floor(Math.random() * target.length)].idx;
+}
+
+// 全単語を覚えたらリセット（リセットした場合はtrueを返す）
+function resetIfAllMastered() {
+  const allMastered = words.every(w => masteredSet.has(w.kr));
+  if (allMastered) {
+    masteredSet.clear();
+    saveMastered();
+    updateMasteredDisplay();
+    return true;
+  }
+  return false;
+}
+
+function showToast(message, duration = 2500) {
+  listenToast.textContent = message;
+  listenToast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => listenToast.classList.remove('show'), duration);
+}
+
 function listenLoop() {
   if (!isListening) return;
+  const myId = ++loopId;
+  const alive = () => isListening && myId === loopId;
 
-  currentIndex = selectNextIndex();
+  currentIndex = selectListenIndex();
   const word = words[currentIndex];
 
-  // ① 韓国語を読み上げ
+  // ① 韓国語
   speakWithCallback(word.kr, 'ko-KR', 0.8, () => {
-    if (!isListening) return;
+    if (!alive()) return;
     listenTimer = setTimeout(() => {
-      if (!isListening) return;
-      // ② 日本語を読み上げ
+      if (!alive()) return;
+      // ② 日本語
       speakWithCallback(word.jp, 'ja-JP', 1.0, () => {
-        if (!isListening) return;
-        // ③ 少し間を置いて次の単語へ
-        listenTimer = setTimeout(listenLoop, PAUSE_AFTER_JAPANESE);
+        if (!alive()) return;
+        // ③ 次の単語へ
+        listenTimer = setTimeout(() => {
+          if (alive()) listenLoop();
+        }, PAUSE_AFTER_JAPANESE);
       });
     }, PAUSE_AFTER_KOREAN);
   });
+}
+
+// 「覚えた」ボタン：今の単語を除外して次へ
+function markCurrentMastered() {
+  if (!isListening) return;
+
+  // 進行中の読み上げ・タイマーを無効化
+  loopId++;
+  clearTimeout(listenTimer);
+  window.speechSynthesis.cancel();
+
+  masteredSet.add(words[currentIndex].kr);
+  saveMastered();
+  updateMasteredDisplay();
+
+  let delay = 400; // cancel直後の読み上げ失敗を避けるための待ち
+  if (resetIfAllMastered()) {
+    showToast("🎉 全単語を覚えました！リセットします", 3000);
+    delay = 3000;
+  } else {
+    showToast("✅ 覚えた単語に追加しました", 1200);
+  }
+
+  listenTimer = setTimeout(() => {
+    if (isListening) listenLoop();
+  }, delay);
 }
 
 async function requestWakeLock() {
@@ -473,9 +615,15 @@ function startListening() {
     try { recognition.stop(); } catch (e) {}
   }
 
+  // 念のため、開始時点で全単語チェック済みならリセット
+  if (resetIfAllMastered()) {
+    alert("全単語を覚えた状態だったため、リセットしました。");
+  }
+
   isListening = true;
   window.speechSynthesis.cancel();
-  listenOverlay.style.display = 'block';
+  updateMasteredDisplay();
+  listenOverlay.style.display = 'flex';
   requestWakeLock();
 
   // ユーザー操作の直後に最初の読み上げを開始（iOS対策）
@@ -484,29 +632,39 @@ function startListening() {
 
 function stopListening() {
   isListening = false;
+  loopId++;
   clearTimeout(listenTimer);
   listenTimer = null;
   window.speechSynthesis.cancel();
   currentUtterance = null;
   listenOverlay.style.display = 'none';
+  listenToast.classList.remove('show');
   releaseWakeLock();
 
-  // 最後に流れた単語を通常画面に表示
   showWord(currentIndex);
   statusDisplay.innerHTML = "🎧 聞き流しモードを停止しました";
 }
 
 listenBtn.addEventListener('click', startListening);
-listenOverlay.addEventListener('click', stopListening);
+masteredBtn.addEventListener('click', markCurrentMastered);
+stopListenBtn.addEventListener('click', stopListening);
 
-// 画面復帰時にWakeLockを再取得
+masteredResetBtn.addEventListener('click', () => {
+  if (confirm("覚えた単語の記録をリセットしますか？")) {
+    masteredSet.clear();
+    saveMastered();
+    updateMasteredDisplay();
+    statusDisplay.innerHTML = "覚えた単語をリセットしました";
+  }
+});
+
 document.addEventListener('visibilitychange', () => {
   if (isListening && document.visibilityState === 'visible') {
     requestWakeLock();
   }
 });
 
-// 音声認識の初期化
+// ===== 音声認識 =====
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
@@ -524,7 +682,6 @@ if (!SpeechRecognition) {
   };
 
   recognition.onresult = (event) => {
-    // 修正: 正しく認識結果を取得
     const recognizedText = event.results[0][0].transcript.trim();
     judgePronunciation(recognizedText);
   };
@@ -539,7 +696,7 @@ if (!SpeechRecognition) {
   };
 }
 
-// 成績表示更新
+// ===== 通常モード =====
 function updateWordStatsDisplay(wordKr) {
   const stat = wordStats[wordKr] || { attempts: 0, corrects: 0 };
   if (stat.attempts === 0) {
@@ -550,7 +707,6 @@ function updateWordStatsDisplay(wordKr) {
   }
 }
 
-// 単語表示の更新（出題時の初期化）
 function showWord(index) {
   const word = words[index];
 
@@ -562,7 +718,6 @@ function showWord(index) {
     meaningDisplay.textContent = "❓❓❓";
   }
 
-  // ボタン表示状態のリセット
   answerBtn.style.display = 'block';
   selfAssessGroup.style.display = 'none';
 
@@ -570,7 +725,6 @@ function showWord(index) {
   statusDisplay.innerHTML = "「答えを見る」か「発音して判定」を押してください";
 }
 
-// 次の単語インデックスをランダム選出
 function selectNextIndex() {
   if (!isWeakOnly) {
     if (words.length <= 1) return 0;
@@ -603,7 +757,6 @@ function selectNextIndex() {
   return randomChoice.idx;
 }
 
-// 「答えを見る」処理
 answerBtn.addEventListener('click', () => {
   const currentWord = words[currentIndex];
   wordDisplay.textContent = currentWord.kr;
@@ -614,7 +767,6 @@ answerBtn.addEventListener('click', () => {
   statusDisplay.innerHTML = "覚えていましたか？ボタンを押して選択してください";
 });
 
-// 自己判定処理（覚えていた / 覚えていなかった）➔ 成績記録後にすぐ次の出題へ
 function recordSelfAssessment(isCorrect) {
   const currentWord = words[currentIndex];
 
@@ -622,19 +774,15 @@ function recordSelfAssessment(isCorrect) {
     wordStats[currentWord.kr] = { attempts: 0, corrects: 0 };
   }
   wordStats[currentWord.kr].attempts += 1;
-
   if (isCorrect) {
     wordStats[currentWord.kr].corrects += 1;
   }
-
   saveStats(wordStats);
 
-  // 即座に次の単語へ移動
   currentIndex = selectNextIndex();
   showWord(currentIndex);
 }
 
-// 音声判定処理
 function judgePronunciation(userInput) {
   const currentWord = words[currentIndex];
   const targetWord = currentWord.kr.replace(/\s+/g, '');
@@ -662,7 +810,6 @@ function judgePronunciation(userInput) {
   updateWordStatsDisplay(currentWord.kr);
 }
 
-// イベント設定
 rememberBtn.addEventListener('click', () => recordSelfAssessment(true));
 forgotBtn.addEventListener('click', () => recordSelfAssessment(false));
 
@@ -718,6 +865,7 @@ nextBtn.addEventListener('click', () => {
 // 初期描画
 currentIndex = Math.floor(Math.random() * words.length);
 showWord(currentIndex);
+updateMasteredDisplay();
 
 // Service Worker 登録
 if ('serviceWorker' in navigator) {
