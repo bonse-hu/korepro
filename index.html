@@ -175,14 +175,15 @@
       position: fixed;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
+      right: 0;
+      bottom: 0;
+      height: 100%;
       background-color: #000;
       z-index: 9999;
       flex-direction: column;
-      justify-content: flex-end;
+      justify-content: center;   /* 下寄せ → 中央寄せ */
       align-items: center;
-      padding: 20px 20px 50px;
+      padding: 20px;
       box-sizing: border-box;
     }
     .listen-info {
@@ -192,7 +193,7 @@
     }
     .listen-toast {
       position: absolute;
-      top: 40%;
+      top: 15%;
       left: 0;
       width: 100%;
       color: #ddd;
