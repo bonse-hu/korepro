@@ -131,6 +131,14 @@
     .btn-mic      { background-color: #5352ed; color: white; }
     .btn-next     { background-color: #2f3542; color: white; }
     .btn-listen   { background-color: #8e44ad; color: white; }
+    .btn-start    { background-color: #2ed573; color: white; }
+    .btn-group-change {
+      background-color: white;
+      color: #4A90E2;
+      border: 2px solid #4A90E2;
+      padding: 9px;
+      font-size: 14px;
+    }
     .btn:disabled {
       background-color: #ccc;
       cursor: not-allowed;
@@ -169,7 +177,77 @@
       border-radius: 8px;
       cursor: pointer;
     }
-    /* 聞き流しモード用の全画面オーバーレイ */
+    .current-groups {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+
+    /* ===== グループ選択画面 ===== */
+    .group-title {
+      font-size: 20px;
+      margin: 0 0 15px;
+      color: #2c3e50;
+    }
+    .group-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .group-actions button {
+      flex: 1;
+      padding: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      border: 1px solid #aaa;
+      background: white;
+      color: #555;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .group-list {
+      text-align: left;
+      max-height: 50vh;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .group-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border: 2px solid #e1e5eb;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .group-item.checked {
+      border-color: #4A90E2;
+      background-color: #eef5fd;
+    }
+    .group-item input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+      accent-color: #4A90E2;
+    }
+    .group-name {
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .group-count {
+      font-size: 12px;
+      color: #888;
+    }
+    .group-selected-info {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 5px;
+    }
+
+    /* ===== 聞き流しモード用の全画面オーバーレイ ===== */
     .listen-overlay {
       display: none;
       position: fixed;
@@ -181,7 +259,7 @@
       background-color: #000;
       z-index: 9999;
       flex-direction: column;
-      justify-content: center;   /* 下寄せ → 中央寄せ */
+      justify-content: center;
       align-items: center;
       padding: 20px;
       box-sizing: border-box;
@@ -224,7 +302,20 @@
 </head>
 <body>
 
-<div class="card">
+<!-- ===== グループ選択画面（起動時に表示） ===== -->
+<div class="card" id="groupScreen">
+  <h2 class="group-title">📂 出題グループを選択</h2>
+  <div class="group-actions">
+    <button id="selectAllBtn">全て選択</button>
+    <button id="clearAllBtn">全て解除</button>
+  </div>
+  <div class="group-list" id="groupList"></div>
+  <div class="group-selected-info" id="groupSelectedInfo"></div>
+  <button class="btn btn-start" id="startBtn">▶ スタート</button>
+</div>
+
+<!-- ===== メイン画面 ===== -->
+<div class="card" id="mainCard" style="display: none;">
   <!-- モード切り替え -->
   <div class="mode-selector">
     <button class="mode-btn active" id="mode1Btn">モード①<br>(日本語➔韓国語)</button>
@@ -233,6 +324,8 @@
 
   <!-- 苦手集中出題トグル -->
   <button class="weak-toggle-btn" id="weakToggleBtn">🔥 苦手集中モード: OFF</button>
+
+  <div class="current-groups" id="currentGroupsDisplay"></div>
 
   <div class="korean-word" id="wordDisplay">---</div>
   <div class="japanese-meaning" id="meaningDisplay">---</div>
@@ -260,6 +353,9 @@
     <button class="mastered-reset-btn" id="masteredResetBtn">リセット</button>
   </div>
 
+  <!-- グループ選択に戻る -->
+  <button class="btn btn-group-change" id="groupChangeBtn">📂 出題グループを変更</button>
+
   <div class="status" id="statusDisplay">「答えを見る」か「発音して判定」を押してください</div>
 </div>
 
@@ -274,126 +370,130 @@
 </div>
 
 <script>
-// 単語データ
+// 単語データ（group: グループ名。同じ名前の単語が1つのグループになります）
 const words = [
-  { kr: "계시다", jp: "いらっしゃる" },
-  { kr: "계절", jp: "季節" },
-  { kr: "계획", jp: "計画" },
-  { kr: "고기", jp: "肉" },
-  { kr: "고등학교", jp: "高等学校" },
-  { kr: "고등학생", jp: "高校生" },
-  { kr: "고르다", jp: "選ぶ" },
-  { kr: "고마웠습니다", jp: "ありがとうございました" },
-  { kr: "고맙다", jp: "ありがたい" },
-  { kr: "고맙습니다", jp: "ありがとうございます" },
-  { kr: "고모", jp: "（父方の）おば" },
-  { kr: "고모부", jp: "（父方の）おばの夫、おじ" },
-  { kr: "고속버스", jp: "高速バス" },
-  { kr: "고양이", jp: "猫" },
-  { kr: "고장", jp: "故障" },
-  { kr: "고추", jp: "唐辛子" },
-  { kr: "고추장", jp: "コチュジャン" },
-  { kr: "고치다", jp: "なおす" },
-  { kr: "고프다", jp: "（お腹が）すいている、空腹だ" },
-  { kr: "고향", jp: "故郷、ふるさと" },
-  { kr: "곧", jp: "すぐ" },
-  { kr: "골목", jp: "路地、裏通り" },
-  { kr: "골프", jp: "ゴルフ" },
-  { kr: "곱다", jp: "美しい" },
-  { kr: "곳", jp: "ところ" },
-  { kr: "공", jp: "ボール、玉" },
-  { kr: "공간", jp: "空間" },
-  { kr: "공기", jp: "空気" },
-  { kr: "공무원", jp: "公務員" },
-  { kr: "공부", jp: "勉強" },
-  { kr: "공부하다", jp: "勉強する" },
-  { kr: "공연", jp: "公演" },
-  { kr: "공원", jp: "公園" },
-  { kr: "공중전화", jp: "公衆電話" },
-  { kr: "공짜", jp: "ただ、無料" },
-  { kr: "공책", jp: "ノート" },
-  { kr: "공항", jp: "空港" },
-  { kr: "공휴일", jp: "祝日" },
-  { kr: "과", jp: "課" },
-  { kr: "과거", jp: "過去" },
-  { kr: "과일", jp: "果物" },
-  { kr: "과자", jp: "菓子" },
-  { kr: "과학", jp: "科学" },
-  { kr: "관계", jp: "関係" },
-  { kr: "관광하다", jp: "観光する" },
-  { kr: "관심", jp: "関心、興味" },
-  { kr: "광고", jp: "広告" },
-  { kr: "괜찮다", jp: "大丈夫だ、構わない" },
-  { kr: "괜찮습니다", jp: "大丈夫です、結構です" },
-  { kr: "교과서", jp: "教科書" },
-  { kr: "교수", jp: "教授" },
-  { kr: "교실", jp: "教室" },
-  { kr: "교체", jp: "交代" },
-  { kr: "교통", jp: "交通" },
-  { kr: "교통사고", jp: "交通事故" },
-  { kr: "교회", jp: "教会" },
-  { kr: "구", jp: "9" },
-  { kr: "구경하다", jp: "見物する" },
-  { kr: "구두", jp: "靴" },
-  { kr: "구름", jp: "雲" },
-  { kr: "구십", jp: "90" },
-  { kr: "구월", jp: "９月" },
-  { kr: "구하다", jp: "求める、手に入れる" },
-  { kr: "국", jp: "スープ、汁" },
-  { kr: "국내", jp: "国内" },
-  { kr: "국립", jp: "国立" },
-  { kr: "국수", jp: "麺、麺類" },
-  { kr: "국어", jp: "国語" },
-  { kr: "국적", jp: "国籍" },
-  { kr: "국제", jp: "国際" },
-  { kr: "군인", jp: "軍人" },
-  { kr: "굽다", jp: "焼く" },
-  { kr: "권", jp: "～巻" },
-  { kr: "귀", jp: "耳" },
-  { kr: "귀엽다", jp: "かわいい" },
-  { kr: "규칙", jp: "規則" },
-  { kr: "귤", jp: "みかん" },
-  { kr: "그", jp: "その" },
-  { kr: "그거", jp: "それ" },
-  { kr: "그것", jp: "それ" },
-  { kr: "그곳", jp: "そこ" },
-  { kr: "그날", jp: "その日" },
-  { kr: "그냥", jp: "そのまま、ただ" },
-  { kr: "그동안", jp: "その間、これまで" },
-  { kr: "그들", jp: "彼ら" },
-  { kr: "그때", jp: "そのとき、当時" },
-  { kr: "그래", jp: "うん、そう（相づち）" },
-  { kr: "그래서", jp: "それで、そうして" },
-  { kr: "그램", jp: "グラム" },
-  { kr: "그러나", jp: "しかし、けれど" },
-  { kr: "그러니까", jp: "だから、そうだから" },
-  { kr: "그러면", jp: "そうなら、それでは" },
-  { kr: "그런", jp: "そんな" },
-  { kr: "그런데", jp: "ところで、ところが" },
-  { kr: "그럼", jp: "では" },
-  { kr: "그렇게", jp: "そのように" },
-  { kr: "그렇구나", jp: "なるほど、そうなんだ" },
-  { kr: "그렇다", jp: "そうだ" },
-  { kr: "그렇습니다", jp: "そうです" },
-  { kr: "그렇지만", jp: "そうだけれど、しかし" }
+  { group: "① 계〜고", kr: "계시다", jp: "いらっしゃる" },
+  { group: "① 계〜고", kr: "계절", jp: "季節" },
+  { group: "① 계〜고", kr: "계획", jp: "計画" },
+  { group: "① 계〜고", kr: "고기", jp: "肉" },
+  { group: "① 계〜고", kr: "고등학교", jp: "高等学校" },
+  { group: "① 계〜고", kr: "고등학생", jp: "高校生" },
+  { group: "① 계〜고", kr: "고르다", jp: "選ぶ" },
+  { group: "① 계〜고", kr: "고마웠습니다", jp: "ありがとうございました" },
+  { group: "① 계〜고", kr: "고맙다", jp: "ありがたい" },
+  { group: "① 계〜고", kr: "고맙습니다", jp: "ありがとうございます" },
+  { group: "① 계〜고", kr: "고모", jp: "（父方の）おば" },
+  { group: "① 계〜고", kr: "고모부", jp: "（父方の）おばの夫、おじ" },
+  { group: "① 계〜고", kr: "고속버스", jp: "高速バス" },
+  { group: "① 계〜고", kr: "고양이", jp: "猫" },
+  { group: "① 계〜고", kr: "고장", jp: "故障" },
+  { group: "① 계〜고", kr: "고추", jp: "唐辛子" },
+  { group: "① 계〜고", kr: "고추장", jp: "コチュジャン" },
+  { group: "① 계〜고", kr: "고치다", jp: "なおす" },
+  { group: "① 계〜고", kr: "고프다", jp: "（お腹が）すいている、空腹だ" },
+  { group: "① 계〜고", kr: "고향", jp: "故郷、ふるさと" },
+  { group: "② 곧〜공", kr: "곧", jp: "すぐ" },
+  { group: "② 곧〜공", kr: "골목", jp: "路地、裏通り" },
+  { group: "② 곧〜공", kr: "골프", jp: "ゴルフ" },
+  { group: "② 곧〜공", kr: "곱다", jp: "美しい" },
+  { group: "② 곧〜공", kr: "곳", jp: "ところ" },
+  { group: "② 곧〜공", kr: "공", jp: "ボール、玉" },
+  { group: "② 곧〜공", kr: "공간", jp: "空間" },
+  { group: "② 곧〜공", kr: "공기", jp: "空気" },
+  { group: "② 곧〜공", kr: "공무원", jp: "公務員" },
+  { group: "② 곧〜공", kr: "공부", jp: "勉強" },
+  { group: "② 곧〜공", kr: "공부하다", jp: "勉強する" },
+  { group: "② 곧〜공", kr: "공연", jp: "公演" },
+  { group: "② 곧〜공", kr: "공원", jp: "公園" },
+  { group: "② 곧〜공", kr: "공중전화", jp: "公衆電話" },
+  { group: "② 곧〜공", kr: "공짜", jp: "ただ、無料" },
+  { group: "② 곧〜공", kr: "공책", jp: "ノート" },
+  { group: "② 곧〜공", kr: "공항", jp: "空港" },
+  { group: "② 곧〜공", kr: "공휴일", jp: "祝日" },
+  { group: "③ 과〜교", kr: "과", jp: "課" },
+  { group: "③ 과〜교", kr: "과거", jp: "過去" },
+  { group: "③ 과〜교", kr: "과일", jp: "果物" },
+  { group: "③ 과〜교", kr: "과자", jp: "菓子" },
+  { group: "③ 과〜교", kr: "과학", jp: "科学" },
+  { group: "③ 과〜교", kr: "관계", jp: "関係" },
+  { group: "③ 과〜교", kr: "관광하다", jp: "観光する" },
+  { group: "③ 과〜교", kr: "관심", jp: "関心、興味" },
+  { group: "③ 과〜교", kr: "광고", jp: "広告" },
+  { group: "③ 과〜교", kr: "괜찮다", jp: "大丈夫だ、構わない" },
+  { group: "③ 과〜교", kr: "괜찮습니다", jp: "大丈夫です、結構です" },
+  { group: "③ 과〜교", kr: "교과서", jp: "教科書" },
+  { group: "③ 과〜교", kr: "교수", jp: "教授" },
+  { group: "③ 과〜교", kr: "교실", jp: "教室" },
+  { group: "③ 과〜교", kr: "교체", jp: "交代" },
+  { group: "③ 과〜교", kr: "교통", jp: "交通" },
+  { group: "③ 과〜교", kr: "교통사고", jp: "交通事故" },
+  { group: "③ 과〜교", kr: "교회", jp: "教会" },
+  { group: "④ 구〜귤", kr: "구", jp: "9" },
+  { group: "④ 구〜귤", kr: "구경하다", jp: "見物する" },
+  { group: "④ 구〜귤", kr: "구두", jp: "靴" },
+  { group: "④ 구〜귤", kr: "구름", jp: "雲" },
+  { group: "④ 구〜귤", kr: "구십", jp: "90" },
+  { group: "④ 구〜귤", kr: "구월", jp: "９月" },
+  { group: "④ 구〜귤", kr: "구하다", jp: "求める、手に入れる" },
+  { group: "④ 구〜귤", kr: "국", jp: "スープ、汁" },
+  { group: "④ 구〜귤", kr: "국내", jp: "国内" },
+  { group: "④ 구〜귤", kr: "국립", jp: "国立" },
+  { group: "④ 구〜귤", kr: "국수", jp: "麺、麺類" },
+  { group: "④ 구〜귤", kr: "국어", jp: "国語" },
+  { group: "④ 구〜귤", kr: "국적", jp: "国籍" },
+  { group: "④ 구〜귤", kr: "국제", jp: "国際" },
+  { group: "④ 구〜귤", kr: "군인", jp: "軍人" },
+  { group: "④ 구〜귤", kr: "굽다", jp: "焼く" },
+  { group: "④ 구〜귤", kr: "권", jp: "～巻" },
+  { group: "④ 구〜귤", kr: "귀", jp: "耳" },
+  { group: "④ 구〜귤", kr: "귀엽다", jp: "かわいい" },
+  { group: "④ 구〜귤", kr: "규칙", jp: "規則" },
+  { group: "④ 구〜귤", kr: "귤", jp: "みかん" },
+  { group: "⑤ 그", kr: "그", jp: "その" },
+  { group: "⑤ 그", kr: "그거", jp: "それ" },
+  { group: "⑤ 그", kr: "그것", jp: "それ" },
+  { group: "⑤ 그", kr: "그곳", jp: "そこ" },
+  { group: "⑤ 그", kr: "그날", jp: "その日" },
+  { group: "⑤ 그", kr: "그냥", jp: "そのまま、ただ" },
+  { group: "⑤ 그", kr: "그동안", jp: "その間、これまで" },
+  { group: "⑤ 그", kr: "그들", jp: "彼ら" },
+  { group: "⑤ 그", kr: "그때", jp: "そのとき、当時" },
+  { group: "⑤ 그", kr: "그래", jp: "うん、そう（相づち）" },
+  { group: "⑤ 그", kr: "그래서", jp: "それで、そうして" },
+  { group: "⑤ 그", kr: "그램", jp: "グラム" },
+  { group: "⑤ 그", kr: "그러나", jp: "しかし、けれど" },
+  { group: "⑤ 그", kr: "그러니까", jp: "だから、そうだから" },
+  { group: "⑤ 그", kr: "그러면", jp: "そうなら、それでは" },
+  { group: "⑤ 그", kr: "그런", jp: "そんな" },
+  { group: "⑤ 그", kr: "그런데", jp: "ところで、ところが" },
+  { group: "⑤ 그", kr: "그럼", jp: "では" },
+  { group: "⑤ 그", kr: "그렇게", jp: "そのように" },
+  { group: "⑤ 그", kr: "그렇구나", jp: "なるほど、そうなんだ" },
+  { group: "⑤ 그", kr: "그렇다", jp: "そうだ" },
+  { group: "⑤ 그", kr: "그렇습니다", jp: "そうです" },
+  { group: "⑤ 그", kr: "그렇지만", jp: "そうだけれど、しかし" }
 ];
 
-let currentIndex = 0;
+// グループ一覧（単語データに登場する順）
+const groups = [...new Set(words.map(w => w.group))];
+
+let currentIndex = -1;
 let currentMode = 1; // 1: 日本語➔韓国語, 2: 韓国語➔日本語
 let isWeakOnly = false;
 let recognition = null;
+let pendingNotice = null; // 出題時に表示する通知メッセージ
 
 // 聞き流しモード用の状態
 let isListening = false;
 let listenTimer = null;
-let loopId = 0;              // 読み上げの世代管理（スキップ時に古いコールバックを無効化）
-let currentUtterance = null; // GC対策で参照を保持
+let loopId = 0;
+let currentUtterance = null;
 let wakeLock = null;
 let toastTimer = null;
 
 // 聞き流しモードの間隔設定（ミリ秒）
-const PAUSE_AFTER_KOREAN = 1500;   // 韓国語のあと日本語までの間
-const PAUSE_AFTER_JAPANESE = 2000; // 日本語のあと次の単語までの間
+const PAUSE_AFTER_KOREAN = 1500;
+const PAUSE_AFTER_JAPANESE = 2000;
 
 // ===== 保存データ (localStorage) =====
 function loadStats() {
@@ -404,7 +504,6 @@ function saveStats(stats) {
   localStorage.setItem('korean_word_stats', JSON.stringify(stats));
 }
 
-// 覚えた単語（聞き流しモードで出題しない単語）
 function loadMastered() {
   const saved = localStorage.getItem('korean_mastered_words');
   return new Set(saved ? JSON.parse(saved) : []);
@@ -413,8 +512,32 @@ function saveMastered() {
   localStorage.setItem('korean_mastered_words', JSON.stringify([...masteredSet]));
 }
 
+// 選択中のグループ（初回は全グループ）
+function loadSelectedGroups() {
+  const saved = localStorage.getItem('korean_selected_groups');
+  if (!saved) return new Set(groups);
+  // 単語データから消えたグループは除外
+  const valid = JSON.parse(saved).filter(g => groups.includes(g));
+  return new Set(valid.length > 0 ? valid : groups);
+}
+function saveSelectedGroups() {
+  localStorage.setItem('korean_selected_groups', JSON.stringify([...selectedGroups]));
+}
+
 let wordStats = loadStats();
 let masteredSet = loadMastered();
+let selectedGroups = loadSelectedGroups();
+
+// ===== 要素取得 =====
+const groupScreen = document.getElementById('groupScreen');
+const mainCard = document.getElementById('mainCard');
+const groupList = document.getElementById('groupList');
+const groupSelectedInfo = document.getElementById('groupSelectedInfo');
+const selectAllBtn = document.getElementById('selectAllBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const startBtn = document.getElementById('startBtn');
+const groupChangeBtn = document.getElementById('groupChangeBtn');
+const currentGroupsDisplay = document.getElementById('currentGroupsDisplay');
 
 const wordDisplay = document.getElementById('wordDisplay');
 const meaningDisplay = document.getElementById('meaningDisplay');
@@ -439,12 +562,121 @@ const masteredCountDisplay = document.getElementById('masteredCountDisplay');
 const masteredResetBtn = document.getElementById('masteredResetBtn');
 const statusDisplay = document.getElementById('statusDisplay');
 
-// 覚えた単語数の表示更新
+// ===== 共通ヘルパー =====
+
+// 選択中グループに含まれる単語のインデックス一覧
+function getActiveIndices() {
+  return words
+    .map((w, idx) => idx)
+    .filter(idx => selectedGroups.has(words[idx].group));
+}
+
+// 苦手単語の判定（未挑戦 または 正解率80%未満）
+function isWeak(word) {
+  const stat = wordStats[word.kr] || { attempts: 0, corrects: 0 };
+  if (stat.attempts === 0) return true;
+  return (stat.corrects / stat.attempts) * 100 < 80;
+}
+
+// 候補からランダムに1つ選ぶ（できるだけ直前の単語を避ける）
+function pickRandom(pool) {
+  if (pool.length === 0) return -1;
+  const candidates = pool.filter(idx => idx !== currentIndex);
+  const target = candidates.length > 0 ? candidates : pool;
+  return target[Math.floor(Math.random() * target.length)];
+}
+
+// HTMLエスケープ（グループ名表示用）
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ===== グループ選択画面 =====
+function renderGroupList() {
+  groupList.innerHTML = '';
+  groups.forEach(g => {
+    const groupWords = words.filter(w => w.group === g);
+    const masteredCount = groupWords.filter(w => masteredSet.has(w.kr)).length;
+    const checked = selectedGroups.has(g);
+
+    const label = document.createElement('label');
+    label.className = 'group-item' + (checked ? ' checked' : '');
+    label.innerHTML = `
+      <input type="checkbox" ${checked ? 'checked' : ''}>
+      <div>
+        <div class="group-name">${escapeHtml(g)}</div>
+        <div class="group-count">${groupWords.length}語（覚えた: ${masteredCount}語）</div>
+      </div>
+    `;
+    const checkbox = label.querySelector('input');
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedGroups.add(g);
+      else selectedGroups.delete(g);
+      label.classList.toggle('checked', checkbox.checked);
+      updateGroupSelectedInfo();
+    });
+    groupList.appendChild(label);
+  });
+  updateGroupSelectedInfo();
+}
+
+function updateGroupSelectedInfo() {
+  const count = getActiveIndices().length;
+  if (selectedGroups.size === 0) {
+    groupSelectedInfo.textContent = "グループを1つ以上選択してください";
+    startBtn.disabled = true;
+  } else {
+    groupSelectedInfo.textContent = `${selectedGroups.size}グループ・${count}語を選択中`;
+    startBtn.disabled = false;
+  }
+}
+
+function showGroupScreen() {
+  if (recognition) {
+    try { recognition.stop(); } catch (e) {}
+  }
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  renderGroupList();
+  mainCard.style.display = 'none';
+  groupScreen.style.display = 'block';
+}
+
+function startWithSelectedGroups() {
+  if (selectedGroups.size === 0) return;
+  saveSelectedGroups();
+
+  groupScreen.style.display = 'none';
+  mainCard.style.display = 'block';
+
+  // 表示中のグループ名
+  const names = groups.filter(g => selectedGroups.has(g));
+  currentGroupsDisplay.textContent = `📂 出題範囲: ${names.join(' / ')}（${getActiveIndices().length}語）`;
+
+  currentIndex = -1;
+  currentIndex = selectNextIndex();
+  showWord(currentIndex);
+  updateMasteredDisplay();
+}
+
+selectAllBtn.addEventListener('click', () => {
+  selectedGroups = new Set(groups);
+  renderGroupList();
+});
+clearAllBtn.addEventListener('click', () => {
+  selectedGroups.clear();
+  renderGroupList();
+});
+startBtn.addEventListener('click', startWithSelectedGroups);
+groupChangeBtn.addEventListener('click', showGroupScreen);
+
+// ===== 覚えた単語 =====
 function updateMasteredDisplay() {
-  // 単語リストに存在しないものは数えない
-  const count = words.filter(w => masteredSet.has(w.kr)).length;
-  masteredCountDisplay.textContent = `✅ 覚えた単語: ${count}語 / ${words.length}語`;
-  listenInfo.textContent = `残り ${words.length - count}語`;
+  const active = getActiveIndices();
+  const count = active.filter(idx => masteredSet.has(words[idx].kr)).length;
+  masteredCountDisplay.textContent = `✅ 覚えた単語: ${count}語 / ${active.length}語`;
+  listenInfo.textContent = `残り ${active.length - count}語`;
 }
 
 // ===== 音声 =====
@@ -498,33 +730,23 @@ function speakWithCallback(text, lang, rate, onEnd) {
 
 // ===== 聞き流しモード =====
 
-// 聞き流し用の出題選択（覚えた単語を除外）
+// 聞き流し用の出題選択（選択中グループ内・覚えた単語を除外）
 function selectListenIndex() {
-  let pool = words
-    .map((w, idx) => ({ w, idx }))
-    .filter(item => !masteredSet.has(item.w.kr));
+  let pool = getActiveIndices().filter(idx => !masteredSet.has(words[idx].kr));
 
-  // 苦手集中モードONなら、苦手単語に絞る（該当なしなら絞らない）
   if (isWeakOnly) {
-    const weakPool = pool.filter(item => {
-      const stat = wordStats[item.w.kr] || { attempts: 0, corrects: 0 };
-      if (stat.attempts === 0) return true;
-      return (stat.corrects / stat.attempts) * 100 < 80;
-    });
+    const weakPool = pool.filter(idx => isWeak(words[idx]));
     if (weakPool.length > 0) pool = weakPool;
   }
-
-  // 直前と同じ単語を避ける（候補が1つしかない場合は除く）
-  const candidates = pool.filter(item => item.idx !== currentIndex);
-  const target = candidates.length > 0 ? candidates : pool;
-  return target[Math.floor(Math.random() * target.length)].idx;
+  return pickRandom(pool);
 }
 
-// 全単語を覚えたらリセット（リセットした場合はtrueを返す）
+// 選択中グループの単語を全部覚えたら、そのグループ分をリセット
 function resetIfAllMastered() {
-  const allMastered = words.every(w => masteredSet.has(w.kr));
+  const active = getActiveIndices();
+  const allMastered = active.length > 0 && active.every(idx => masteredSet.has(words[idx].kr));
   if (allMastered) {
-    masteredSet.clear();
+    active.forEach(idx => masteredSet.delete(words[idx].kr));
     saveMastered();
     updateMasteredDisplay();
     return true;
@@ -544,7 +766,14 @@ function listenLoop() {
   const myId = ++loopId;
   const alive = () => isListening && myId === loopId;
 
-  currentIndex = selectListenIndex();
+  const nextIdx = selectListenIndex();
+  if (nextIdx < 0) {
+    // 念のため（通常はリセット処理により発生しない）
+    resetIfAllMastered();
+    listenTimer = setTimeout(() => { if (alive()) listenLoop(); }, 500);
+    return;
+  }
+  currentIndex = nextIdx;
   const word = words[currentIndex];
 
   // ① 韓国語
@@ -564,11 +793,9 @@ function listenLoop() {
   });
 }
 
-// 「覚えた」ボタン：今の単語を除外して次へ
 function markCurrentMastered() {
-  if (!isListening) return;
+  if (!isListening || currentIndex < 0) return;
 
-  // 進行中の読み上げ・タイマーを無効化
   loopId++;
   clearTimeout(listenTimer);
   window.speechSynthesis.cancel();
@@ -577,9 +804,9 @@ function markCurrentMastered() {
   saveMastered();
   updateMasteredDisplay();
 
-  let delay = 400; // cancel直後の読み上げ失敗を避けるための待ち
+  let delay = 400;
   if (resetIfAllMastered()) {
-    showToast("🎉 全単語を覚えました！リセットします", 3000);
+    showToast("🎉 選択中の単語を全て覚えました！リセットします", 3000);
     delay = 3000;
   } else {
     showToast("✅ 覚えた単語に追加しました", 1200);
@@ -616,9 +843,8 @@ function startListening() {
     try { recognition.stop(); } catch (e) {}
   }
 
-  // 念のため、開始時点で全単語チェック済みならリセット
   if (resetIfAllMastered()) {
-    alert("全単語を覚えた状態だったため、リセットしました。");
+    alert("選択中の単語が全て「覚えた」状態だったため、リセットしました。");
   }
 
   isListening = true;
@@ -627,7 +853,6 @@ function startListening() {
   listenOverlay.style.display = 'flex';
   requestWakeLock();
 
-  // ユーザー操作の直後に最初の読み上げを開始（iOS対策）
   listenLoop();
 }
 
@@ -642,7 +867,7 @@ function stopListening() {
   listenToast.classList.remove('show');
   releaseWakeLock();
 
-  showWord(currentIndex);
+  if (currentIndex >= 0) showWord(currentIndex);
   statusDisplay.innerHTML = "🎧 聞き流しモードを停止しました";
 }
 
@@ -651,8 +876,8 @@ masteredBtn.addEventListener('click', markCurrentMastered);
 stopListenBtn.addEventListener('click', stopListening);
 
 masteredResetBtn.addEventListener('click', () => {
-  if (confirm("覚えた単語の記録をリセットしますか？")) {
-    masteredSet.clear();
+  if (confirm("選択中グループの「覚えた単語」の記録をリセットしますか？")) {
+    getActiveIndices().forEach(idx => masteredSet.delete(words[idx].kr));
     saveMastered();
     updateMasteredDisplay();
     statusDisplay.innerHTML = "覚えた単語をリセットしました";
@@ -709,6 +934,7 @@ function updateWordStatsDisplay(wordKr) {
 }
 
 function showWord(index) {
+  if (index < 0) return;
   const word = words[index];
 
   if (currentMode === 1) {
@@ -723,39 +949,24 @@ function showWord(index) {
   selfAssessGroup.style.display = 'none';
 
   updateWordStatsDisplay(word.kr);
-  statusDisplay.innerHTML = "「答えを見る」か「発音して判定」を押してください";
+  statusDisplay.innerHTML = pendingNotice || "「答えを見る」か「発音して判定」を押してください";
+  pendingNotice = null;
 }
 
+// 通常モードの出題選択（選択中グループ内から）
 function selectNextIndex() {
-  if (!isWeakOnly) {
-    if (words.length <= 1) return 0;
-    let nextIdx;
-    do {
-      nextIdx = Math.floor(Math.random() * words.length);
-    } while (nextIdx === currentIndex);
-    return nextIdx;
+  const active = getActiveIndices();
+  let pool = active;
+
+  if (isWeakOnly) {
+    const weakPool = active.filter(idx => isWeak(words[idx]));
+    if (weakPool.length === 0) {
+      pendingNotice = "🎉 選択中グループの苦手単語をすべて克服しました！";
+    } else {
+      pool = weakPool;
+    }
   }
-
-  const weakIndices = words.map((w, idx) => {
-    const stat = wordStats[w.kr] || { attempts: 0, corrects: 0 };
-    const rate = stat.attempts > 0 ? (stat.corrects / stat.attempts) * 100 : 0;
-    return { idx, rate, attempts: stat.attempts };
-  }).filter(item => item.attempts === 0 || item.rate < 80);
-
-  if (weakIndices.length === 0) {
-    statusDisplay.innerHTML = "🎉 すべての苦手単語を克服しました！";
-    if (words.length <= 1) return 0;
-    let nextIdx;
-    do {
-      nextIdx = Math.floor(Math.random() * words.length);
-    } while (nextIdx === currentIndex);
-    return nextIdx;
-  }
-
-  const candidates = weakIndices.filter(item => item.idx !== currentIndex);
-  const targetList = candidates.length > 0 ? candidates : weakIndices;
-  const randomChoice = targetList[Math.floor(Math.random() * targetList.length)];
-  return randomChoice.idx;
+  return pickRandom(pool);
 }
 
 answerBtn.addEventListener('click', () => {
@@ -802,9 +1013,9 @@ function judgePronunciation(userInput) {
 
   if (cleanInput === targetWord) {
     wordStats[currentWord.kr].corrects += 1;
-    statusDisplay.innerHTML = `<span class="result-correct">⭕ 発音成功！</span><br>（認識結果: ${userInput}）`;
+    statusDisplay.innerHTML = `<span class="result-correct">⭕ 発音成功！</span><br>（認識結果: ${escapeHtml(userInput)}）`;
   } else {
-    statusDisplay.innerHTML = `<span class="result-wrong">❌ 惜しい！</span><br>（認識結果: ${userInput}）`;
+    statusDisplay.innerHTML = `<span class="result-wrong">❌ 惜しい！</span><br>（認識結果: ${escapeHtml(userInput)}）`;
   }
 
   saveStats(wordStats);
@@ -844,7 +1055,7 @@ weakToggleBtn.addEventListener('click', () => {
 });
 
 audioBtn.addEventListener('click', () => {
-  playKoreanAudio(words[currentIndex].kr);
+  if (currentIndex >= 0) playKoreanAudio(words[currentIndex].kr);
 });
 
 micBtn.addEventListener('click', () => {
@@ -863,10 +1074,8 @@ nextBtn.addEventListener('click', () => {
   showWord(currentIndex);
 });
 
-// 初期描画
-currentIndex = Math.floor(Math.random() * words.length);
-showWord(currentIndex);
-updateMasteredDisplay();
+// ===== 起動時：グループ選択画面を表示 =====
+showGroupScreen();
 
 // Service Worker 登録
 if ('serviceWorker' in navigator) {
