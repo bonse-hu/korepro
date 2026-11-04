@@ -130,7 +130,7 @@
     .btn-audio    { background-color: #70a1ff; color: white; }
     .btn-mic      { background-color: #5352ed; color: white; }
     .btn-next     { background-color: #2f3542; color: white; }
-    .btn-listen   { background-color: #8e44ad; color: white; }
+    .btn-listen   { background-color: #8e44ad; color: white; font-size: 14px; }
     .btn-start    { background-color: #2ed573; color: white; }
     .btn-group-change {
       background-color: white;
@@ -264,14 +264,45 @@
       padding: 20px;
       box-sizing: border-box;
     }
+    .listen-direction {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
     .listen-info {
       color: #555;
       font-size: 13px;
       margin-bottom: 15px;
     }
+    /* 答えの表示エリア（高さを固定して、表示・非表示でボタン位置が動かないようにする） */
+    .listen-answer {
+      min-height: 110px;
+      margin-bottom: 25px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      max-width: 360px;
+      width: 100%;
+    }
+    .listen-answer.show {
+      opacity: 1;
+    }
+    .listen-answer-kr {
+      color: #f0f0f0;
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      word-break: keep-all;
+    }
+    .listen-answer-jp {
+      color: #aaa;
+      font-size: 18px;
+    }
     .listen-toast {
       position: absolute;
-      top: 15%;
+      top: 10%;
       left: 0;
       width: 100%;
       color: #ddd;
@@ -344,8 +375,11 @@
   <button class="btn btn-mic" id="micBtn">🎤 発音して判定</button>
   <button class="btn btn-next" id="nextBtn">次へ ➔</button>
 
-  <!-- 聞き流しモード開始ボタン -->
-  <button class="btn btn-listen" id="listenBtn">🎧 聞き流しモード</button>
+  <!-- 聞き流しモード開始ボタン（方向別） -->
+  <div class="btn-group">
+    <button class="btn btn-listen" id="listenKjBtn">🎧 聞き流し<br>（韓➔日）</button>
+    <button class="btn btn-listen" id="listenJkBtn">🎧 聞き流し<br>（日➔韓）</button>
+  </div>
 
   <!-- 覚えた単語の数とリセット -->
   <div class="mastered-info">
@@ -362,7 +396,15 @@
 <!-- 聞き流しモード中の黒画面 -->
 <div class="listen-overlay" id="listenOverlay">
   <div class="listen-toast" id="listenToast"></div>
+  <div class="listen-direction" id="listenDirectionDisplay"></div>
   <div class="listen-info" id="listenInfo"></div>
+
+  <!-- 答えの表示（2つ目の音声のときだけ表示） -->
+  <div class="listen-answer" id="listenAnswer">
+    <div class="listen-answer-kr" id="listenAnswerKr"></div>
+    <div class="listen-answer-jp" id="listenAnswerJp"></div>
+  </div>
+
   <div class="listen-controls">
     <button class="btn btn-mastered" id="masteredBtn">✅ 覚えた（次回から出さない）</button>
     <button class="btn btn-stop" id="stopListenBtn">⏹ 停止</button>
@@ -384,15 +426,28 @@ let pendingNotice = null; // 出題時に表示する通知メッセージ
 
 // 聞き流しモード用の状態
 let isListening = false;
+let listenDirection = 'kj'; // 'kj': 韓国語➔日本語, 'jk': 日本語➔韓国語
 let listenTimer = null;
 let loopId = 0;
 let currentUtterance = null;
 let wakeLock = null;
 let toastTimer = null;
 
-// 聞き流しモードの間隔設定（ミリ秒）
-const PAUSE_AFTER_KOREAN = 1500;
-const PAUSE_AFTER_JAPANESE = 2000;
+// ===== 聞き流しモードの設定 =====
+// 読み上げ速度
+const RATE_KOREAN = 0.8;
+const RATE_JAPANESE = 1.0;
+
+// 1つ目の音声のあと、2つ目（答え）までの間（ミリ秒）
+const PAUSE_AFTER_FIRST = {
+  kj: 1500, // 韓➔日
+  jk: 2500  // 日➔韓（韓国語を思い出す時間を長めに）
+};
+// 2つ目の音声のあと、次の単語までの間（ミリ秒）
+const PAUSE_AFTER_SECOND = 2000;
+
+// 読み上げの先頭に付ける余白（先頭欠け対策）。不要なら '' にする
+const LEAD_PADDING = { 'ko-KR': '、', 'ja-JP': '、' };
 
 // ===== 保存データ (localStorage) =====
 function loadStats() {
@@ -415,7 +470,6 @@ function saveMastered() {
 function loadSelectedGroups() {
   const saved = localStorage.getItem('korean_selected_groups');
   if (!saved) return new Set(groups);
-  // 単語データから消えたグループは除外
   const valid = JSON.parse(saved).filter(g => groups.includes(g));
   return new Set(valid.length > 0 ? valid : groups);
 }
@@ -451,10 +505,15 @@ const forgotBtn = document.getElementById('forgotBtn');
 const audioBtn = document.getElementById('audioBtn');
 const micBtn = document.getElementById('micBtn');
 const nextBtn = document.getElementById('nextBtn');
-const listenBtn = document.getElementById('listenBtn');
+const listenKjBtn = document.getElementById('listenKjBtn');
+const listenJkBtn = document.getElementById('listenJkBtn');
 const listenOverlay = document.getElementById('listenOverlay');
 const listenInfo = document.getElementById('listenInfo');
+const listenDirectionDisplay = document.getElementById('listenDirectionDisplay');
 const listenToast = document.getElementById('listenToast');
+const listenAnswer = document.getElementById('listenAnswer');
+const listenAnswerKr = document.getElementById('listenAnswerKr');
+const listenAnswerJp = document.getElementById('listenAnswerJp');
 const masteredBtn = document.getElementById('masteredBtn');
 const stopListenBtn = document.getElementById('stopListenBtn');
 const masteredCountDisplay = document.getElementById('masteredCountDisplay');
@@ -485,7 +544,7 @@ function pickRandom(pool) {
   return target[Math.floor(Math.random() * target.length)];
 }
 
-// HTMLエスケープ（グループ名表示用）
+// HTMLエスケープ
 function escapeHtml(str) {
   return str.replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -549,7 +608,6 @@ function startWithSelectedGroups() {
   groupScreen.style.display = 'none';
   mainCard.style.display = 'block';
 
-  // 表示中のグループ名
   const names = groups.filter(g => selectedGroups.has(g));
   currentGroupsDisplay.textContent = `📂 出題範囲: ${names.join(' / ')}（${getActiveIndices().length}語）`;
 
@@ -598,7 +656,7 @@ function playKoreanAudio(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ko-KR';
-    utterance.rate = 0.8;
+    utterance.rate = RATE_KOREAN;
     const voice = findVoice('ko-KR');
     if (voice) utterance.voice = voice;
     window.speechSynthesis.speak(utterance);
@@ -607,8 +665,10 @@ function playKoreanAudio(text) {
   }
 }
 
+// 読み上げ終了時にコールバックを呼ぶ（先頭に余白を付けて欠けを防ぐ）
 function speakWithCallback(text, lang, rate, onEnd) {
-  const utterance = new SpeechSynthesisUtterance(text);
+  const padding = LEAD_PADDING[lang] || '';
+  const utterance = new SpeechSynthesisUtterance(padding + text);
   utterance.lang = lang;
   utterance.rate = rate;
   const voice = findVoice(lang);
@@ -627,7 +687,56 @@ function speakWithCallback(text, lang, rate, onEnd) {
   window.speechSynthesis.speak(utterance);
 }
 
+// ===== 音声出力の維持（先頭欠け対策） =====
+let keepAliveCtx = null;
+let keepAliveSource = null;
+
+function startAudioKeepAlive() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!keepAliveCtx) keepAliveCtx = new AC();
+    if (keepAliveCtx.state === 'suspended') keepAliveCtx.resume();
+
+    const sr = keepAliveCtx.sampleRate;
+    const buffer = keepAliveCtx.createBuffer(1, sr, sr);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.0005;
+    }
+
+    keepAliveSource = keepAliveCtx.createBufferSource();
+    keepAliveSource.buffer = buffer;
+    keepAliveSource.loop = true;
+    keepAliveSource.connect(keepAliveCtx.destination);
+    keepAliveSource.start();
+  } catch (e) {
+    console.log('KeepAlive Fail:', e);
+  }
+}
+
+function stopAudioKeepAlive() {
+  if (keepAliveSource) {
+    try { keepAliveSource.stop(); } catch (e) {}
+    keepAliveSource.disconnect();
+    keepAliveSource = null;
+  }
+  if (keepAliveCtx && keepAliveCtx.state === 'running') {
+    keepAliveCtx.suspend();
+  }
+}
+
 // ===== 聞き流しモード =====
+
+// 答えの表示・非表示
+function showListenAnswer(word) {
+  listenAnswerKr.textContent = word.kr;
+  listenAnswerJp.textContent = word.jp;
+  listenAnswer.classList.add('show');
+}
+function hideListenAnswer() {
+  listenAnswer.classList.remove('show');
+}
 
 // 聞き流し用の出題選択（選択中グループ内・覚えた単語を除外）
 function selectListenIndex() {
@@ -667,7 +776,6 @@ function listenLoop() {
 
   const nextIdx = selectListenIndex();
   if (nextIdx < 0) {
-    // 念のため（通常はリセット処理により発生しない）
     resetIfAllMastered();
     listenTimer = setTimeout(() => { if (alive()) listenLoop(); }, 500);
     return;
@@ -675,20 +783,30 @@ function listenLoop() {
   currentIndex = nextIdx;
   const word = words[currentIndex];
 
-  // ① 韓国語
-  speakWithCallback(word.kr, 'ko-KR', 0.8, () => {
+  // 方向に応じて、1つ目（問題）と2つ目（答え）の音声を決める
+  const korean   = { text: word.kr, lang: 'ko-KR', rate: RATE_KOREAN };
+  const japanese = { text: word.jp, lang: 'ja-JP', rate: RATE_JAPANESE };
+  const first  = listenDirection === 'kj' ? korean : japanese;
+  const second = listenDirection === 'kj' ? japanese : korean;
+
+  // 新しい単語の開始時は答えを隠す
+  hideListenAnswer();
+
+  // ① 問題の音声
+  speakWithCallback(first.text, first.lang, first.rate, () => {
     if (!alive()) return;
     listenTimer = setTimeout(() => {
       if (!alive()) return;
-      // ② 日本語
-      speakWithCallback(word.jp, 'ja-JP', 1.0, () => {
+      // ② 答えを画面に表示して、答えの音声
+      showListenAnswer(word);
+      speakWithCallback(second.text, second.lang, second.rate, () => {
         if (!alive()) return;
         // ③ 次の単語へ
         listenTimer = setTimeout(() => {
           if (alive()) listenLoop();
-        }, PAUSE_AFTER_JAPANESE);
+        }, PAUSE_AFTER_SECOND);
       });
-    }, PAUSE_AFTER_KOREAN);
+    }, PAUSE_AFTER_FIRST[listenDirection]);
   });
 }
 
@@ -698,6 +816,7 @@ function markCurrentMastered() {
   loopId++;
   clearTimeout(listenTimer);
   window.speechSynthesis.cancel();
+  hideListenAnswer();
 
   masteredSet.add(words[currentIndex].kr);
   saveMastered();
@@ -733,7 +852,8 @@ function releaseWakeLock() {
   }
 }
 
-function startListening() {
+// direction: 'kj'（韓➔日） または 'jk'（日➔韓）
+function startListening(direction) {
   if (!('speechSynthesis' in window)) {
     alert("お使いのブラウザは音声読み上げに対応していません。");
     return;
@@ -746,13 +866,31 @@ function startListening() {
     alert("選択中の単語が全て「覚えた」状態だったため、リセットしました。");
   }
 
+  listenDirection = direction;
+  listenDirectionDisplay.textContent =
+    direction === 'kj' ? "🎧 韓国語 ➔ 日本語" : "🎧 日本語 ➔ 韓国語";
+
   isListening = true;
   window.speechSynthesis.cancel();
+  hideListenAnswer();
   updateMasteredDisplay();
   listenOverlay.style.display = 'flex';
   requestWakeLock();
 
-  listenLoop();
+  // ボタンを押した直後に開始する必要がある（iOS対策）
+  startAudioKeepAlive();
+
+  // 無音のウォームアップで音声エンジンを準備
+  const warmUp = new SpeechSynthesisUtterance('、');
+  warmUp.lang = 'ja-JP';
+  warmUp.volume = 0;
+  window.speechSynthesis.speak(warmUp);
+
+  // 少し待ってから最初の単語へ
+  const myId = ++loopId;
+  listenTimer = setTimeout(() => {
+    if (isListening && myId === loopId) listenLoop();
+  }, 600);
 }
 
 function stopListening() {
@@ -762,15 +900,18 @@ function stopListening() {
   listenTimer = null;
   window.speechSynthesis.cancel();
   currentUtterance = null;
+  hideListenAnswer();
   listenOverlay.style.display = 'none';
   listenToast.classList.remove('show');
   releaseWakeLock();
+  stopAudioKeepAlive();
 
   if (currentIndex >= 0) showWord(currentIndex);
   statusDisplay.innerHTML = "🎧 聞き流しモードを停止しました";
 }
 
-listenBtn.addEventListener('click', startListening);
+listenKjBtn.addEventListener('click', () => startListening('kj'));
+listenJkBtn.addEventListener('click', () => startListening('jk'));
 masteredBtn.addEventListener('click', markCurrentMastered);
 stopListenBtn.addEventListener('click', stopListening);
 
