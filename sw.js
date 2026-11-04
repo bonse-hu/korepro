@@ -1,5 +1,5 @@
 const CACHE_NAME = 'korean-pwa-v2';
-const urlsToCache = ['./', './index.html', './manifest.json'];
+const urlsToCache = ['./', './index.html','./words.js','./manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
